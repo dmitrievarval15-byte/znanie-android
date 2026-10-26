@@ -1,39 +1,65 @@
+
 name: Build Znanie APK
+
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download project archive
+        shell: bash
         run: |
+          set -euo pipefail
           curl -fL 'https://www.dropbox.com/scl/fi/aoy63lr7gv0p3c4s7wwi4/znanie-android-no-ai.zip?rlkey=7qqtnp7zx46unitpctep2aksh&dl=1' -o project.zip
           unzip -t project.zip
           mkdir -p /tmp/znanie
           unzip -q project.zip -d /tmp/znanie
-          ROOT=$(dirname "$(find /tmp/znanie -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)")
-          test -f "$ROOT/build.gradle" -o -f "$ROOT/build.gradle.kts"
+          ROOT="$(dirname "$(find /tmp/znanie -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)")"
+          test -n "$ROOT"
+          test -f "$ROOT/build.gradle" || test -f "$ROOT/build.gradle.kts"
           cp -a "$ROOT"/. .
-      - uses: actions/setup-java@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
         with:
-          tools: ''
-          packages: 'platform-tools, platforms;android-35, build-tools;35.0.0'
-      - uses: gradle/actions/setup-gradle@v4
+          packages: ''
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build APK
-        run: gradle assembleDebug
-      - uses: actions/upload-artifact@v4
+
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: znanie-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          
